@@ -1,8 +1,10 @@
 {
-  "name": "genlayer-project",
+  "name": "trustping",
   "type": "module",
   "private": true,
-  "workspaces": ["frontend"],
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",

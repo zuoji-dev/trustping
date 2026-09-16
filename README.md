@@ -1,169 +1,135 @@
-# Sample GenLayer project
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/license/mit/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/8Jm4v89VAu)
-[![Telegram](https://img.shields.io/badge/Telegram--T.svg?style=social&logo=telegram)](https://t.me/genlayer)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/yeagerai.svg?style=social&label=Follow%20%40GenLayer)](https://x.com/GenLayer)
-[![GitHub star chart](https://img.shields.io/github/stars/yeagerai/genlayer-project-boilerplate?style=social)](https://star-history.com/#yeagerai/genlayer-js)
+# TrustPing — SLA escrow, settled by consensus
 
-## About
-This project includes the boilerplate code for a GenLayer use case implementation, specifically a football bets game.
+**TrustPing** is trustless SLA (service-level agreement) enforcement for AI
+agent services, built on [GenLayer](https://genlayer.com) and deployed on
+**Studio Next** (Consensus v0.6).
 
-## Branching
+Agent API providers post a **GEN bond** and list an SLA for an HTTP endpoint.
+Buyers pre-pay monitoring periods into **on-chain escrow**. Anyone can trigger
+a check — permissionless keeper — and **GenLayer validators independently
+re-fetch the endpoint** and reach consensus on whether the service was up.
+Passed periods pay the provider; failed periods refund the buyer **plus a
+penalty taken from the provider's bond**.
 
-See [docs/BRANCHING.md](docs/BRANCHING.md) for the release-train model used by
-this repo.
+> Why GenLayer: "my API is always online" is the provider's own claim. A
+> centralized monitor just moves the trust. Here, multiple validators each
+> probe the endpoint themselves, agree on the verdict through consensus, and
+> the contract moves money automatically on that verdict. Disagreements force
+> leader rotation; appeals use GenLayer's native v0.6 mechanism.
 
-## What's included
-- An example intelligent contract (Football Bets) with web access and LLM integration
-- **Direct mode tests** — fast, in-memory unit tests with web/LLM mocking (~ms per test)
-- **Integration tests** — full end-to-end tests against GenLayer Studio
-- **Contract linting** — static analysis to catch common contract issues before deployment
-- **CI pipeline** — GitHub Actions workflow for linting and direct tests
-- A production-ready Next.js 15 frontend with TypeScript, TanStack Query, and Radix UI
-- Configuration file template and deployment scripts
+**Live contract (Studio Next / chain 61997):**
+`0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB`
+→ [explorer](https://explorer-studio-dev.genlayer.com/address/0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB)
 
-## Requirements
-- Python >= 3.12
-- [GenLayer CLI](https://github.com/genlayerlabs/genlayer-cli) globally installed: `npm install -g genlayer`
-- GenLayer Studio (for integration tests and deployment): Install from [Docs](https://docs.genlayer.com/developers/intelligent-contracts/tooling-setup#using-the-genlayer-studio) or use the hosted [GenLayer Studio](https://studio.genlayer.com/)
+---
 
-## Project Structure
+## Verify it in 5 minutes
+
+1. `cd frontend && npm ci && cp .env.example .env && npm run dev`
+   (the contract address is already filled in).
+2. Open http://localhost:3000 with MetaMask on the Studio Next network
+   (RPC `https://studio-next.genlayer.com/api`, chain id `61997`).
+3. The **Marketplace** tab lists live SLAs with on-chain uptime stats.
+4. **Buy coverage** on a listing (e.g. 3 periods × 0.1 GEN) — the GEN goes
+   into contract escrow.
+5. Open the **Coverages** tab and hit **Run check**: validators fetch the
+   endpoint, consensus agrees on `up` / `200xx`, and the verdict is stored
+   on-chain. No checker is trusted — every verdict is a consensus decision.
+6. After the last period, **Settle** splits the escrow. To see the breach
+   path, buy coverage on a listing whose endpoint 404s: failed checks refund
+   the buyer and fine the provider's bond.
+
+`node scripts/smoke.mjs 0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB` runs the
+same flow headless with an ephemeral faucet-funded account.
+
+## Consensus design (the part that matters)
+
+Every check is a non-deterministic web probe (`gl.nondet.web.get`). The
+leader's answer is **never trusted by itself**:
+
+- **Leader** fetches the endpoint and derives stable decision fields:
+  `up` (2xx/3xx), `status_class` (`"200xx"`, `"404xx"`, …).
+- **Validator** re-runs the same probe in its own context and compares the
+  derived fields. `up` and `status_class` must match exactly; raw latency is
+  deliberately kept out of consensus (timing jitter across validators would
+  destabilize agreement).
+- **Errors are classified**: network-level probe failures raise
+  `[TRANSIENT]` errors; a validator agrees with a leader error only when
+  both hit transient failures. Any substantive disagreement returns `False`,
+  forcing leader rotation.
+- Bond **penalties** (half a period's price per failed check, capped by the
+  bond) accumulate to the buyer's refund — the bond is real collateral, not
+  decoration.
+
+Contract boundary:
+
+| Owns | Details |
+|---|---|
+| **Frontend** | UI, wallet, client-side latency display, tx status, caching |
+| **Contract** | Escrow accounting, bond penalties, verdict storage, settlement splits |
+| **Evidence source** | The endpoint itself — validators re-fetch it; nothing is trusted |
+
+## Repo layout
 
 ```
-contracts/              # Python intelligent contracts
-tests/
-  direct/               # Fast in-memory tests (no Studio required)
-    test_create_bet.py   # Bet creation logic
-    test_resolve_bet.py  # Bet resolution with web/LLM mocks
-    test_views.py        # Read-only view methods
-  integration/           # Full tests against GenLayer Studio
-    test_football_bets.py
-    fixtures.py          # Expected state fixtures
-frontend/               # Next.js 15 app (TypeScript, TanStack Query, Radix UI)
-deploy/                 # TypeScript deployment scripts
-gltest.config.yaml      # Test runner network configuration
-pyproject.toml          # Python/pytest configuration
-.github/workflows/      # CI pipeline
+contracts/sla_escrow.py        TrustPingEscrow intelligent contract
+tests/direct/                  25 fast in-memory tests (mocked HTTP probes)
+tests/integration/             Full-consensus tests on Studio Devnet
+scripts/smoke.mjs              Headless end-to-end lifecycle on studio-next
+frontend/                      Next.js 15 app (Transaction Kit RC2 / genlayer-js 2.0 RC)
+deploy/deployScript.ts         Deployment script (genlayer-js)
 ```
 
-## Quick Start
+## Development
 
-### 1. Set up Python environment
+Requires Node ≥ 18, Python ≥ 3.12.
 
-```shell
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+```bash
+python -m venv .venv
+.venv/Scripts/pip install -r requirements.txt     # Linux/macOS: .venv/bin/pip
+npm ci                                            # root + frontend workspace
+
+# Lint the contract (every check must pass; SDK validation loads the runner)
+.venv/Scripts/genvm-lint check contracts/sla_escrow.py
+
+# Fast direct tests — mocked web, leader path, escrow math
+.venv/Scripts/python -m pytest tests/direct/ -v
+
+# Full consensus integration tests on Studio Next (real validators, minutes)
+.venv/Scripts/gltest tests/integration/test_sla_escrow.py -v -s
+
+# Headless lifecycle demo (uses the studio-dev faucet to fund a temp account)
+node scripts/smoke.mjs <contractAddress>
+
+# Deploy
+genlayer network set studio-dev
+genlayer deploy --contract contracts/sla_escrow.py \
+  --fees '{"distribution":{"leaderTimeunitsAllocation":"100","validatorTimeunitsAllocation":"200","appealRounds":"0","executionBudgetPerRound":"25000000000000000","executionConsumed":"0","totalMessageFees":"0","rotations":["3"],"maxPriceGenPerTimeUnit":"2","storageFeeMaxGasPrice":"300000000","receiptFeeMaxGasPrice":"300000000"}}' \
+  --fee-value 100000000000010352
 ```
 
-### 2. Lint your contracts
+### v0.6 notes (fees)
 
-Run the GenVM linter to catch issues before deployment:
+Studio Next charges consensus fees. Every deploy/write carries a fee deposit
+estimated from the network (`estimate_transaction_fees_for_write` /
+`estimateTransactionFeesForWrite`) and the returned `distribution`,
+`feeValue` **and** `messageAllocations` are submitted unchanged. Message
+allocations matter for `settle`, which emits transfer child messages.
+Frontend reads happen through `readContract` (no deposit); writes sign via
+MetaMask through the genlayer-js provider bridge.
 
-```shell
-genvm-lint check contracts/football_bets.py
-```
+### Windows note
 
-The linter catches:
-- Forbidden imports and non-deterministic calls
-- Invalid storage types (must use `TreeMap`, `DynArray`, `u256`, etc.)
-- Missing decorators and return type annotations
-- Non-deterministic operations outside equivalence principle blocks
-- And [20+ other rules](https://github.com/genlayerlabs/genvm-linter)
+`genlayer-test <= 0.30` has a Windows-only bug: the direct runner deletes its
+stdin temp file while fd 0 still references it (`PermissionError`). This repo
+patches the installed `gltest/direct/loader.py` locally (deferred `atexit`
+unlink). Linux/macOS are unaffected.
 
-### 3. Run direct mode tests
+## Track
 
-Direct mode tests run contracts in-memory without needing GenLayer Studio. They use mocks for web requests and LLM calls, giving you fast feedback (~milliseconds per test):
-
-```shell
-pytest tests/direct/ -v
-```
-
-Direct mode features used in these tests:
-- `direct_deploy("contracts/file.py")` — deploy contract in memory
-- `direct_vm.sender = address` — set transaction sender
-- `direct_vm.mock_web(pattern, response)` — mock HTTP/render calls
-- `direct_vm.mock_llm(pattern, response)` — mock LLM responses
-- `direct_vm.expect_revert("message")` — assert expected failures
-- `direct_vm.clear_mocks()` — reset mocks between calls
-
-### 4. Deploy the contract
-
-1. Choose your network: `genlayer network`
-2. Deploy: `genlayer deploy` (runs the script in `/deploy/deployScript.ts`)
-
-### 5. Run integration tests
-
-Integration tests deploy the contract to GenLayer Studio and test with real consensus:
-
-```shell
-gltest tests/integration/ -v -s
-```
-
-These require GenLayer Studio running (local or hosted).
-
-### 6. Set up the frontend
-
-1. Copy `frontend/.env.example` to `frontend/.env`
-2. Add your deployed contract address as `NEXT_PUBLIC_CONTRACT_ADDRESS`
-3. Run:
-
-```shell
-cd frontend
-npm install
-npm run dev
-```
-
-The app will be available at http://localhost:3000/.
-
-### Fee profile (developer suggestions)
-
-The frontend uses published `@genlayer/transaction-kit` and
-`@genlayer/transaction-kit-react` version `0.1.0-rc.2`, with `genlayer-js`
-`2.0.0-rc.1`. Run `npm ci` from the repository root to install the locked releases.
-
-The default network is Studio Next (Consensus v0.6) at
-`https://studio-next.genlayer.com/api` (chain ID `61997`). Copy
-`frontend/.env.example`; change the RPC URL and chain ID together when targeting
-another deployment. Wallet, SDK, and Transaction Kit share this configuration.
-
-Transaction Kit uses active network fee defaults. The checked-in
-`frontend/fee-profile.json` is not wired into the application because measured
-fees are specific to a contract build, GenVM version, and network. To use a
-developer profile, regenerate it for your deployment and explicitly pass it as
-`suggestions` to `createTransactionKit` in `frontend/lib/genlayer/kit.ts`.
-
-Regenerate it with `npm run test:fees` while GenLayer Studio is running. The fee profile command estimates a trusted Studio fee preset from the active fee policy, runs the measured Football Bets deploy/create-bet scenario, and writes max-observed x 1.25 headroom as decimal strings.
-
-Missing keys, such as time-unit allocations, fall back to network defaults.
-
-## How the Football Bets Contract Works
-
-1. **Creating Bets**: Users bet on a football match by providing the game date, teams, and predicted winner.
-2. **Resolving Bets**: After the match, the contract fetches results from BBC Sport, uses an LLM to extract the score, and validates via the equivalence principle.
-3. **Points**: Correct predictions earn points. Users can query their points or the leaderboard.
-
-## Testing Strategy
-
-| Test Type | Command | Speed | Requires Studio |
-|-----------|---------|-------|-----------------|
-| **Lint** | `genvm-lint check contracts/*.py` | ~250ms | No |
-| **Direct** | `pytest tests/direct/ -v` | ~ms/test | No |
-| **Integration** | `gltest tests/integration/ -v -s` | ~min/test | Yes |
-
-**Recommended workflow:**
-1. Lint after every contract change
-2. Run direct tests frequently during development
-3. Run integration tests before deployment to verify consensus behavior
-
-For AI coding agents (Claude Code, Cursor, etc.), the linter and direct tests provide the fast feedback loop needed for iterative development without requiring a running Studio instance.
-
-## Community
-- **[Discord](https://discord.gg/8Jm4v89VAu)**: Discussions, support, and announcements
-- **[Telegram](https://t.me/genlayer)**: Informal chats and quick updates
-
-## Documentation
-For detailed information, see our [documentation](https://docs.genlayer.com/).
+**Agent Tank → Agentic Commerce Infrastructure** ("SLA and uptime
+enforcement — API escrow that releases against … decentralized monitoring").
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+MIT
