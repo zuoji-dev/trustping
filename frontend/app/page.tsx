@@ -113,7 +113,7 @@ export default function HomePage() {
           <a href="https://studio-next.genlayer.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
             Studio Next
           </a>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
+          <a href="https://github.com/zuoji-dev/trustping" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
             GitHub
           </a>
         </div>
