@@ -144,8 +144,12 @@ export class TrustPing {
 
   async getListings(): Promise<Listing[]> {
     const raw = await this.read<any>("get_listings");
-    return Object.values(TrustPing.normalizeMap<Listing>(raw)).sort((a, b) =>
-      a.id.localeCompare(b.id)
+    // Surface listings with real check history first, then newest.
+    return Object.values(TrustPing.normalizeMap<Listing>(raw)).sort(
+      (a, b) =>
+        b.checks_done - a.checks_done ||
+        b.checks_passed - a.checks_passed ||
+        b.id.localeCompare(a.id)
     );
   }
 
