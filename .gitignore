@@ -7,3 +7,8 @@ node_modules/
 .next/
 .pytest_cache/
 frontend/fee-profile.json.bak
+
+# local secrets / research
+.research/
+*.keystore.json
+scripts/_seed_tmp.mjs
