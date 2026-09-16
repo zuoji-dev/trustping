@@ -1,114 +1,86 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { AccountPanel } from "./AccountPanel";
-import { CreateBetModal } from "./CreateBetModal";
-import { useBets } from "@/lib/hooks/useFootballBets";
-import { Logo, LogoMark } from "./Logo";
+
+function TrustPingMark({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg
+      className={`${className} text-accent`}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="TrustPing logo"
+    >
+      <path
+        d="M12 2L21 6V12C21 17.52 17.16 21.74 12 23C6.84 21.74 3 17.52 3 12V6L12 2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        fill="none"
+      />
+      <path
+        d="M7 12H9L10.5 8.5L13 15.5L14.5 12H17"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const { data: bets } = useBets();
 
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
-      const threshold = 80;
-
-      setIsScrolled(scrollY > 20);
-
-      // Calculate progress from 0 to 1 for smoother animations
-      const progress = Math.min(Math.max((scrollY - 10) / threshold, 0), 1);
-      setScrollProgress(progress);
-    };
-
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Minimal variant with scroll animations
-  const paddingTop = Math.round(scrollProgress * 16); // 0-16px padding
-  const headerHeight = 64 - Math.round(scrollProgress * 8); // 64px to 56px
-
-  // Only apply border radius on desktop (md breakpoint and up)
-  const getBorderRadius = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      return Math.round(scrollProgress * 9999); // Fully rounded when scrolled on desktop
-    }
-    return 0; // No rounding on mobile
-  };
-  const borderRadius = getBorderRadius();
-
-  const totalBets = bets?.length || 0;
-  const resolvedBets = bets?.filter(bet => bet.has_resolved).length || 0;
-
   return (
-    <header
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-out"
-      style={{ paddingTop: `${paddingTop}px` }}
-    >
-      <div
-        className="transition-all duration-500 ease-out"
-        style={{
-          width: '100%',
-          maxWidth: isScrolled ? '80rem' : '100%',
-          margin: '0 auto',
-          borderRadius: `${borderRadius}px`,
-        }}
-      >
+    <header className="fixed top-0 left-0 right-0 z-50">
+      <div className="px-4 md:px-6 pt-3">
         <div
-          className="backdrop-blur-xl border transition-all duration-500 ease-out md:rounded-none"
+          className="mx-auto max-w-7xl rounded-2xl border border-white/10 backdrop-blur-xl transition-all duration-300"
           style={{
-            borderColor: `oklch(0.3 0.02 0 / ${0.4 + scrollProgress * 0.4})`,
-            background: `linear-gradient(135deg, oklch(0.18 0.01 0 / ${0.1 + scrollProgress * 0.3}) 0%, oklch(0.15 0.01 0 / ${0.05 + scrollProgress * 0.25}) 50%, oklch(0.16 0.01 0 / ${0.08 + scrollProgress * 0.27}) 100%)`,
-            borderRadius: `${borderRadius}px`,
-            borderWidth: '1px',
-            borderLeftWidth: isScrolled ? '1px' : '0px',
-            borderRightWidth: isScrolled ? '1px' : '0px',
-            borderTopWidth: isScrolled ? '1px' : '0px',
-            boxShadow: isScrolled
-              ? '0 32px 64px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 0 oklch(0.3 0.02 0 / 0.3)'
-              : 'none',
-            backdropFilter: 'blur(16px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.01 0 / 0.85) 0%, oklch(0.15 0.01 0 / 0.8) 100%)",
+            boxShadow: isScrolled ? "0 16px 40px 0 rgba(0,0,0,0.35)" : "none",
           }}
         >
-          <div
-            className="px-6 transition-all duration-500 mx-auto"
-            style={{
-              maxWidth: isScrolled ? '80rem' : '112rem',
-            }}
-          >
-            <div
-              className="flex items-center justify-between transition-all duration-500"
-              style={{ height: `${headerHeight}px` }}
-            >
-              {/* Left: Logo */}
-              <div className="flex items-center gap-3">
-                {/* Show mark only on mobile, full logo on desktop */}
-                <LogoMark size="md" className="flex md:hidden" />
-                <Logo size="md" className="hidden md:flex" />
-                <span className="text-lg md:text-xl font-bold ml-2">Football Market</span>
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            <Link href="/" className="flex items-center gap-2.5">
+              <TrustPingMark className="w-7 h-7" />
+              <div className="flex flex-col leading-none">
+                <span className="text-lg font-bold tracking-tight">
+                  Trust<span className="text-accent">Ping</span>
+                </span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  SLA escrow for agents
+                </span>
               </div>
+            </Link>
 
-              {/* Center: Stats */}
-              <div className="hidden md:flex items-center gap-6 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Total Bets:</span>
-                  <span className="text-foreground font-bold text-accent">{totalBets}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Resolved:</span>
-                  <span className="text-foreground font-bold text-accent">{resolvedBets}</span>
-                </div>
-              </div>
-
-              {/* Right: Actions */}
-              <div className="flex items-center gap-3">
-                <CreateBetModal />
-                <AccountPanel />
-              </div>
+            <div className="flex items-center gap-3">
+              <a
+                href="https://explorer-studio-dev.genlayer.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden md:inline-flex text-xs text-muted-foreground hover:text-accent transition-colors"
+              >
+                Explorer ↗
+              </a>
+              <a
+                href="https://docs.genlayer.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden md:inline-flex text-xs text-muted-foreground hover:text-accent transition-colors"
+              >
+                Docs ↗
+              </a>
+              <AccountPanel />
             </div>
           </div>
         </div>
