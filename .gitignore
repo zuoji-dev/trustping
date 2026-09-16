@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+artifacts/
+.env
+node_modules/
+.next/
+.pytest_cache/
+frontend/fee-profile.json.bak
