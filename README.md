@@ -108,30 +108,11 @@ runs the same lifecycle with an ephemeral faucet-funded account.
 **Local development:** `cd frontend && npm ci && cp .env.example .env &&
 npm run dev` (contract address is already filled in).
 
-## Consensus design (the part that matters)
-
-Every check is a non-deterministic web probe (`gl.nondet.web.get`). The
-leader's answer is **never trusted by itself**:
-
-- **Leader** fetches the endpoint and derives stable decision fields:
-  `up` (2xx/3xx), `status_class` (`"200xx"`, `"404xx"`, …).
-- **Validator** re-runs the same probe in its own context and compares the
-  derived fields. `up` and `status_class` must match exactly; raw latency is
-  deliberately kept out of consensus (timing jitter across validators would
-  destabilize agreement).
-- **Errors are classified**: network-level probe failures raise
-  `[TRANSIENT]` errors; a validator agrees with a leader error only when
-  both hit transient failures. Any substantive disagreement returns `False`,
-  forcing leader rotation.
-- Bond **penalties** (half a period's price per failed check, capped by the
-  bond) accumulate to the buyer's refund — the bond is real collateral, not
-  decoration.
-
 Contract boundary:
 
 | Owns | Details |
 |---|---|
-| **Frontend** | UI, wallet, client-side latency display, tx status, caching |
+| **Frontend** | UI, wallet, tx status, caching — no backend; reads go straight to the GenLayer RPC |
 | **Contract** | Escrow accounting, bond penalties, verdict storage, settlement splits |
 | **Evidence source** | The endpoint itself — validators re-fetch it; nothing is trusted |
 
@@ -148,65 +129,58 @@ deploy/deployScript.ts         Deployment script (genlayer-js)
 
 ## Development
 
-Requires Node ≥ 18, Python ≥ 3.12.
+### Prerequisites
+
+- **Node.js ≥ 18** and npm (frontend + tooling)
+- **Python ≥ 3.12** and pip (contract, tests, linter)
+- **MetaMask** (for using the frontend and signing transactions)
+- Optional: the GenLayer CLI (`npm install -g genlayer`) for contract
+  deployment and `genvm-lint` is installed with the Python requirements
+
+### Local setup
 
 ```bash
+# 1. Python environment (contract + tests + genvm-lint)
 python -m venv .venv
-.venv/Scripts/pip install -r requirements.txt     # Linux/macOS: .venv/bin/pip
-npm ci                                            # root + frontend workspace
+.venv/Scripts/pip install -r requirements.txt      # Linux/macOS: .venv/bin/pip
 
-# Lint the contract (every check must pass; SDK validation loads the runner)
-.venv/Scripts/genvm-lint check contracts/sla_escrow.py
+# 2. Node dependencies (root workspace + frontend)
+npm ci
 
-# Fast direct tests — mocked web, leader path, escrow math
-.venv/Scripts/python -m pytest tests/direct/ -v
+# 3. Frontend environment — copy the example and adjust if needed
+cd frontend && cp .env.example .env && cd ..
+#    .env already points at Studio Next (chain 61997) and the deployed
+#    TrustPingEscrow contract address.
 
-# Full consensus integration tests on Studio Next (real validators, minutes)
-.venv/Scripts/gltest tests/integration/test_sla_escrow.py -v -s
-
-# Headless lifecycle demo (uses the studio-dev faucet to fund a temp account)
-node scripts/smoke.mjs <contractAddress>
-
-# Deploy
-genlayer network set studio-dev
-genlayer deploy --contract contracts/sla_escrow.py \
-  --fees '{"distribution":{"leaderTimeunitsAllocation":"100","validatorTimeunitsAllocation":"200","appealRounds":"0","executionBudgetPerRound":"25000000000000000","executionConsumed":"0","totalMessageFees":"0","rotations":["3"],"maxPriceGenPerTimeUnit":"2","storageFeeMaxGasPrice":"300000000","receiptFeeMaxGasPrice":"300000000"}}' \
-  --fee-value 100000000000010352
+# 4. Start the frontend
+cd frontend && npm run dev        # → http://localhost:3000
 ```
 
-### Environment notes
+### Verify your setup
 
-- **Studio Next (studio-dev, chain 61997) is a release-candidate
-  environment**: it may throttle requests (HTTP 429) or return 503 during
-  hiccups — retry after a minute. If the environment resets and the contract
-  address above stops working, redeploy with the command in the Development
-  section and update `frontend/.env`.
-- The frontend is fully client-side — reads go straight from the browser to
-  the GenLayer RPC via genlayer-js; there is **no backend to deploy**.
-- Direct tests run in-memory (no network); integration tests and the smoke
-  script hit the real studio-dev network and its faucet.
+```bash
+# Lint the contract (static checks + SDK validation against the pinned runner)
+.venv/Scripts/genvm-lint check contracts/sla_escrow.py
 
-### v0.6 notes (fees)
+# Fast direct tests — in-memory, mocked HTTP, no network needed
+.venv/Scripts/python -m pytest tests/direct/ -v
 
-Studio Next charges consensus fees. Every deploy/write carries a fee deposit
-estimated from the network (`estimate_transaction_fees_for_write` /
-`estimateTransactionFeesForWrite`) and the returned `distribution`,
-`feeValue` **and** `messageAllocations` are submitted unchanged. Message
-allocations matter for `settle`, which emits transfer child messages.
-Frontend reads happen through `readContract` (no deposit); writes sign via
-MetaMask through the genlayer-js provider bridge.
+# Full consensus integration tests on Studio Next (real validators, ~2 min)
+.venv/Scripts/gltest tests/integration/test_sla_escrow.py -v -s
 
-### Windows note
+# Headless end-to-end lifecycle (funds a temp account via the dev faucet)
+node scripts/smoke.mjs <contractAddress>
+```
 
-`genlayer-test <= 0.30` has a Windows-only bug: the direct runner deletes its
-stdin temp file while fd 0 still references it (`PermissionError`). This repo
-patches the installed `gltest/direct/loader.py` locally (deferred `atexit`
-unlink). Linux/macOS are unaffected.
+### Deploy the contract
 
-## Track
+```bash
+genlayer network set studio-dev
+genlayer deploy --contract contracts/sla_escrow.py   --fees '{"distribution":{"leaderTimeunitsAllocation":"100","validatorTimeunitsAllocation":"200","appealRounds":"0","executionBudgetPerRound":"25000000000000000","executionConsumed":"0","totalMessageFees":"0","rotations":["3"],"maxPriceGenPerTimeUnit":"2","storageFeeMaxGasPrice":"300000000","receiptFeeMaxGasPrice":"300000000"}}'   --fee-value 100000000000010352
+```
 
-**Agent Tank → Agentic Commerce Infrastructure** ("SLA and uptime
-enforcement — API escrow that releases against … decentralized monitoring").
+Then set the deployed address as `NEXT_PUBLIC_CONTRACT_ADDRESS` in
+`frontend/.env` and restart the dev server.
 
 ## License
 
