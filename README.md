@@ -1,28 +1,71 @@
 # TrustPing — SLA escrow, settled by consensus
 
-**TrustPing** is trustless SLA (service-level agreement) enforcement for AI
-agent services, built on [GenLayer](https://genlayer.com) and deployed on
-**Studio Next** (Consensus v0.6).
-
-Agent API providers post a **GEN bond** and list an SLA for an HTTP endpoint.
-Buyers pre-pay monitoring periods into **on-chain escrow**. Anyone can trigger
-a check — permissionless keeper — and **GenLayer validators independently
-re-fetch the endpoint** and reach consensus on whether the service was up.
-Passed periods pay the provider; failed periods refund the buyer **plus a
-penalty taken from the provider's bond**.
-
-> Why GenLayer: "my API is always online" is the provider's own claim. A
-> centralized monitor just moves the trust. Here, multiple validators each
-> probe the endpoint themselves, agree on the verdict through consensus, and
-> the contract moves money automatically on that verdict. Disagreements force
-> leader rotation; appeals use GenLayer's native v0.6 mechanism.
+TrustPing is trustless SLA (service-level agreement) enforcement for AI agent
+services, built on [GenLayer](https://genlayer.com) and deployed on **Studio
+Next** (Consensus v0.6). Agent API providers post a **GEN bond** and list an
+SLA for an HTTP endpoint. Buyers pre-pay monitoring periods into **on-chain
+escrow**. Anyone can trigger a check — permissionless keeper — and GenLayer
+validators **independently re-fetch the endpoint** and reach consensus on
+whether the service was up. Passed periods pay the provider; failed periods
+refund the buyer **plus a penalty taken from the provider's bond**.
 
 **Live app:** https://trustping-gray.vercel.app
 **Live contract (Studio Next / chain 61997):**
 `0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB`
 → [explorer](https://explorer-studio-dev.genlayer.com/address/0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB)
 
----
+![TrustPing marketplace — live SLA listings with on-chain uptime stats](docs/screenshots/marketplace.png)
+
+## What works today
+
+The live flow on Studio Next supports any HTTP endpoint:
+
+- Providers list an SLA with a **bonded stake** (bond is real collateral held
+  by the contract, returned only when no active coverage remains).
+- Buyers pre-pay N monitoring periods into contract **escrow** (exact-payment
+  enforced).
+- A **permissionless keeper** triggers checks — no monitoring operator
+  exists; anyone can run the probe.
+- Every check is a **consensus decision**: the leader fetches the endpoint and
+  every validator re-fetches it independently and compares the derived
+  verdict (`up` + HTTP status class).
+- **Failure compensation is automatic**: each failed check refunds that
+  period's price to the buyer **plus a bond penalty** (half a period's price,
+  capped by the bond) — visible on-chain as "Bond penalties to buyer".
+- **Settlement splits the escrow by consensus results** via transfer child
+  messages, with full per-period verdict history and aggregate uptime stats
+  queryable on-chain.
+- **Frontend** (Next.js 15, fully client-side): Marketplace with live uptime
+  badges, Coverages with check history / settle / early cancel, Provider with
+  bond management, and per-transaction v0.6 fee estimation including message
+  allocations.
+
+![Coverage cards with consensus check history and breach penalties](docs/screenshots/coverages.png)
+
+An HTTP 200 proves the endpoint answered once. It does **not**, by itself,
+prove the service is reliable — which is exactly why the verdict is not taken
+from a single fetch: validators probe independently, transient network
+failures only agree when both sides hit them, and every substantive
+disagreement rotates the leader.
+
+## What GenLayer does
+
+The endpoint URL is the evidence source; nothing about it is trusted. The
+contract owns the minimum state transition that needs consensus:
+
+- **Leader**: `gl.nondet.web.get(endpoint)` → derives stable decision fields
+  (`up`: 2xx/3xx, `status_class`: `"200xx"`, `"404xx"`, …).
+- **Validator**: re-runs the same probe in its own context and compares the
+  derived fields. `up` and `status_class` must match exactly. Raw latency is
+  deliberately kept out of consensus — validator timing jitter would
+  destabilize agreement.
+- **Errors are classified** with `[TRANSIENT]` prefixes: a validator agrees
+  with a leader error only when it independently hits the same transient
+  failure; any substantive disagreement returns `False` and forces leader
+  rotation.
+- The accepted verdict, the full per-period history, bond balances, and
+  settlement splits are stored on-chain; disputes can use GenLayer v0.6's
+  native appeal mechanism.
 
 ## Verify it in 5 minutes — no local setup needed
 
