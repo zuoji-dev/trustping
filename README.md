@@ -17,30 +17,53 @@ penalty taken from the provider's bond**.
 > the contract moves money automatically on that verdict. Disagreements force
 > leader rotation; appeals use GenLayer's native v0.6 mechanism.
 
+**Live app:** https://trustping-gray.vercel.app
 **Live contract (Studio Next / chain 61997):**
 `0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB`
 → [explorer](https://explorer-studio-dev.genlayer.com/address/0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB)
 
 ---
 
-## Verify it in 5 minutes
+## Verify it in 5 minutes — no local setup needed
 
-1. `cd frontend && npm ci && cp .env.example .env && npm run dev`
-   (the contract address is already filled in).
-2. Open http://localhost:3000 with MetaMask on the Studio Next network
-   (RPC `https://studio-next.genlayer.com/api`, chain id `61997`).
-3. The **Marketplace** tab lists live SLAs with on-chain uptime stats.
-4. **Buy coverage** on a listing (e.g. 3 periods × 0.1 GEN) — the GEN goes
-   into contract escrow.
-5. Open the **Coverages** tab and hit **Run check**: validators fetch the
-   endpoint, consensus agrees on `up` / `200xx`, and the verdict is stored
-   on-chain. No checker is trusted — every verdict is a consensus decision.
-6. After the last period, **Settle** splits the escrow. To see the breach
-   path, buy coverage on a listing whose endpoint 404s: failed checks refund
-   the buyer and fine the provider's bond.
+**Step 0.** Set up a wallet once:
+1. Install [MetaMask](https://metamask.io/download/) if you don't have it.
+2. Add the GenLayer Studio Next network to MetaMask:
+   RPC `https://studio-next.genlayer.com/api` · Chain ID `61997` · Symbol `GEN`.
+3. Get free test GEN: open the Studio web app at
+   https://studio-dev.genlayer.com, click the account selector, then the 💧
+   **Fund account** button — or call the dev faucet directly:
+   ```bash
+   curl -X POST https://studio-next.genlayer.com/api -H "Content-Type: application/json"      -d '{"jsonrpc":"2.0","id":1,"method":"sim_fundAccount","params":["0xYOUR_ADDRESS","0x56BC75E2D63100000"]}'
+   ```
+   (that funds 50 test GEN — fees and bonds are refunded or refunded-at-settlement,
+   so a small balance goes a long way).
 
-`node scripts/smoke.mjs 0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB` runs the
-same flow headless with an ephemeral faucet-funded account.
+**Step 1.** Open the live app: **https://trustping-gray.vercel.app**
+Connect MetaMask when prompted (accept the network add/switch).
+
+**Step 2.** The **Marketplace** tab lists live SLAs with on-chain uptime
+stats. Click **Buy coverage** on a listing (e.g. 3 periods × 0.1 GEN) —
+confirm in MetaMask and the GEN moves into contract escrow.
+
+**Step 3.** Open the **Coverages** tab and hit **Run check**: GenLayer
+validators independently fetch the endpoint, consensus agrees on the
+verdict (`UP` / `200xx`), and the check is recorded on-chain with the full
+history. Nobody's word is trusted — every verdict is a consensus decision.
+
+**Step 4.** After the last period is checked, hit **Settle**: the escrow
+splits itself — passed periods pay the provider, the rest is refunded.
+
+**Step 5.** To see the breach path, buy coverage on the "404 test" listing
+(an intentionally dead endpoint): every check returns `DOWN / 400xx`, and
+failed checks refund the buyer **plus a penalty taken from the provider's
+bond** — visible as "Bond penalties to buyer" on the coverage card.
+
+Headless alternative: `node scripts/smoke.mjs 0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB`
+runs the same lifecycle with an ephemeral faucet-funded account.
+
+**Local development:** `cd frontend && npm ci && cp .env.example .env &&
+npm run dev` (contract address is already filled in).
 
 ## Consensus design (the part that matters)
 
