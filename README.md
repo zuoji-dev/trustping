@@ -131,6 +131,18 @@ genlayer deploy --contract contracts/sla_escrow.py \
   --fee-value 100000000000010352
 ```
 
+### Environment notes
+
+- **Studio Next (studio-dev, chain 61997) is a release-candidate
+  environment**: it may throttle requests (HTTP 429) or return 503 during
+  hiccups — retry after a minute. If the environment resets and the contract
+  address above stops working, redeploy with the command in the Development
+  section and update `frontend/.env`.
+- The frontend is fully client-side — reads go straight from the browser to
+  the GenLayer RPC via genlayer-js; there is **no backend to deploy**.
+- Direct tests run in-memory (no network); integration tests and the smoke
+  script hit the real studio-dev network and its faucet.
+
 ### v0.6 notes (fees)
 
 Studio Next charges consensus fees. Every deploy/write carries a fee deposit
