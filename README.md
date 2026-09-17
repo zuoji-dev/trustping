@@ -35,7 +35,7 @@ The live flow on Studio Next supports any HTTP endpoint:
 - **Settlement splits the escrow by consensus results** via transfer child
   messages, with full per-period verdict history and aggregate uptime stats
   queryable on-chain.
-- **Frontend** (Next.js 15, fully client-side): Marketplace with live uptime
+- **Frontend** (Next.js, fully client-side): Marketplace with live uptime
   badges, Coverages with check history / settle / early cancel, Provider with
   bond management, and per-transaction v0.6 fee estimation including message
   allocations.
@@ -67,20 +67,29 @@ contract owns the minimum state transition that needs consensus:
   settlement splits are stored on-chain; disputes can use GenLayer v0.6's
   native appeal mechanism.
 
+Contract boundary:
+
+| Owns | Details |
+|---|---|
+| **Frontend** | UI, wallet, tx status, caching — no backend; reads go straight to the GenLayer RPC |
+| **Contract** | Escrow accounting, bond penalties, verdict storage, settlement splits |
+| **Evidence source** | The endpoint itself — validators re-fetch it; nothing is trusted |
+
 ## Verify it in 5 minutes — no local setup needed
 
 **Step 0.** Set up a wallet once:
 1. Install [MetaMask](https://metamask.io/download/) if you don't have it.
 2. Add the GenLayer Studio Next network to MetaMask:
    RPC `https://studio-next.genlayer.com/api` · Chain ID `61997` · Symbol `GEN`.
-3. Get free test GEN: open the Studio web app at
-   https://studio-dev.genlayer.com, click the account selector, then the 💧
-   **Fund account** button — or call the dev faucet directly:
+3. Get free test GEN into your MetaMask wallet — call the dev faucet with
+   your address (funds 50 test GEN; deposits and bonds are refunded at
+   settlement, so a small balance goes a long way):
    ```bash
    curl -X POST https://studio-next.genlayer.com/api -H "Content-Type: application/json"      -d '{"jsonrpc":"2.0","id":1,"method":"sim_fundAccount","params":["0xYOUR_ADDRESS","0x56BC75E2D63100000"]}'
    ```
-   (that funds 50 test GEN — fees and bonds are refunded or refunded-at-settlement,
-   so a small balance goes a long way).
+   (The Studio web app at https://studio-dev.genlayer.com also has a 💧
+   **Fund account** button, but it funds the Studio's own embedded account —
+   use the curl above to fund your MetaMask address.)
 
 **Step 1.** Open the live app: **https://trustping-gray.vercel.app**
 Connect MetaMask when prompted (accept the network add/switch).
@@ -97,24 +106,16 @@ history. Nobody's word is trusted — every verdict is a consensus decision.
 **Step 4.** After the last period is checked, hit **Settle**: the escrow
 splits itself — passed periods pay the provider, the rest is refunded.
 
-**Step 5.** To see the breach path, buy coverage on the "404 test" listing
-(an intentionally dead endpoint): every check returns `DOWN / 400xx`, and
-failed checks refund the buyer **plus a penalty taken from the provider's
-bond** — visible as "Bond penalties to buyer" on the coverage card.
+**Step 5.** To see the breach path, buy coverage on the **"404 Test (dead
+endpoint)"** listing: every check returns `DOWN / 400xx`, and failed checks
+refund the buyer **plus a penalty taken from the provider's bond** — visible
+as "Bond penalties to buyer" on the coverage card.
 
 Headless alternative: `node scripts/smoke.mjs 0xE90E0960AB1c18DA979730f8f3c1802Ad41782CB`
 runs the same lifecycle with an ephemeral faucet-funded account.
 
-**Local development:** `cd frontend && npm ci && cp .env.example .env &&
-npm run dev` (contract address is already filled in).
-
-Contract boundary:
-
-| Owns | Details |
-|---|---|
-| **Frontend** | UI, wallet, tx status, caching — no backend; reads go straight to the GenLayer RPC |
-| **Contract** | Escrow accounting, bond penalties, verdict storage, settlement splits |
-| **Evidence source** | The endpoint itself — validators re-fetch it; nothing is trusted |
+**Local development:** see [Development](#development) — four steps from a
+clean machine to a running frontend.
 
 ## Repo layout
 
@@ -123,7 +124,7 @@ contracts/sla_escrow.py        TrustPingEscrow intelligent contract
 tests/direct/                  25 fast in-memory tests (mocked HTTP probes)
 tests/integration/             Full-consensus tests on Studio Devnet
 scripts/smoke.mjs              Headless end-to-end lifecycle on studio-next
-frontend/                      Next.js 15 app (Transaction Kit RC2 / genlayer-js 2.0 RC)
+frontend/                      Next.js app (genlayer-js 2.0.0-rc.1, MetaMask provider bridge)
 deploy/deployScript.ts         Deployment script (genlayer-js)
 ```
 
@@ -135,7 +136,8 @@ deploy/deployScript.ts         Deployment script (genlayer-js)
 - **Python ≥ 3.12** and pip (contract, tests, linter)
 - **MetaMask** (for using the frontend and signing transactions)
 - Optional: the GenLayer CLI (`npm install -g genlayer`) for contract
-  deployment and `genvm-lint` is installed with the Python requirements
+  deployment. `genvm-lint` comes with the Python requirements and needs no
+  separate install.
 
 ### Local setup
 
